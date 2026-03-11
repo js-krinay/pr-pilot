@@ -99,3 +99,134 @@ def test_first_run_creates_baseline_state(tmp_path: Path) -> None:
     state = json.loads(state_file.read_text())
     assert "1" in state
     assert state["1"]["last_commit_sha"] == "abc123"
+
+
+def test_detects_new_commits(tmp_path: Path) -> None:
+    """Detects new commits on a tracked PR."""
+    repo = _make_git_repo(tmp_path)
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+
+    (state_dir / "state.json").write_text(json.dumps({
+        "1": {
+            "branch": "feat/foo",
+            "last_commit_sha": "old_sha",
+            "last_review_id": None,
+            "review_loop_count": 0,
+        }
+    }))
+
+    mock_gh = tmp_path / "gh"
+    mock_gh.write_text(
+        '#!/bin/sh\n'
+        'echo \'[{"number":1,"headRefName":"feat/foo","headRefOid":"new_sha",'
+        '"reviewDecision":"","reviews":[]}]\'\n'
+    )
+    mock_gh.chmod(0o755)
+    mock_git = tmp_path / "git"
+    mock_git.write_text("#!/bin/sh\nexit 0\n")
+    mock_git.chmod(0o755)
+
+    env = {
+        "KLIR_CRON_STATE_DIR": str(state_dir),
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin')}",
+        "HOME": str(tmp_path),
+    }
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), str(repo)],
+        capture_output=True, text=True, env=env,
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert len(output["events"]) == 1
+    evt = output["events"][0]
+    assert evt["type"] == "new_commits"
+    assert evt["pr"] == 1
+    assert evt["old_sha"] == "old_sha"
+    assert evt["new_sha"] == "new_sha"
+
+
+def test_detects_changes_requested(tmp_path: Path) -> None:
+    """Detects a new changes_requested review."""
+    repo = _make_git_repo(tmp_path)
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+
+    (state_dir / "state.json").write_text(json.dumps({
+        "1": {
+            "branch": "feat/foo",
+            "last_commit_sha": "abc123",
+            "last_review_id": None,
+            "review_loop_count": 0,
+        }
+    }))
+
+    mock_gh = tmp_path / "gh"
+    mock_gh.write_text(
+        '#!/bin/sh\n'
+        'echo \'[{"number":1,"headRefName":"feat/foo","headRefOid":"abc123",'
+        '"reviewDecision":"CHANGES_REQUESTED",'
+        '"reviews":[{"id":"rev_1","state":"CHANGES_REQUESTED",'
+        '"author":{"login":"reviewer-bot"},"body":"Fix auth.py:34"}]}]\'\n'
+    )
+    mock_gh.chmod(0o755)
+    mock_git = tmp_path / "git"
+    mock_git.write_text("#!/bin/sh\nexit 0\n")
+    mock_git.chmod(0o755)
+
+    env = {
+        "KLIR_CRON_STATE_DIR": str(state_dir),
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin')}",
+        "HOME": str(tmp_path),
+    }
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), str(repo)],
+        capture_output=True, text=True, env=env,
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    evt = output["events"][0]
+    assert evt["type"] == "changes_requested"
+    assert evt["review_id"] == "rev_1"
+    assert evt["loop_count"] == 1
+
+
+def test_detects_pr_closed(tmp_path: Path) -> None:
+    """Detects a PR that was previously tracked but is no longer open."""
+    repo = _make_git_repo(tmp_path)
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+
+    (state_dir / "state.json").write_text(json.dumps({
+        "1": {
+            "branch": "feat/foo",
+            "last_commit_sha": "abc123",
+            "last_review_id": None,
+            "review_loop_count": 0,
+        }
+    }))
+
+    mock_gh = tmp_path / "gh"
+    mock_gh.write_text('#!/bin/sh\necho "[]"\n')
+    mock_gh.chmod(0o755)
+    mock_git = tmp_path / "git"
+    mock_git.write_text("#!/bin/sh\nexit 0\n")
+    mock_git.chmod(0o755)
+
+    env = {
+        "KLIR_CRON_STATE_DIR": str(state_dir),
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin')}",
+        "HOME": str(tmp_path),
+    }
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), str(repo)],
+        capture_output=True, text=True, env=env,
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    evt = output["events"][0]
+    assert evt["type"] == "pr_closed"
+    assert evt["pr"] == 1

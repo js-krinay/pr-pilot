@@ -103,9 +103,66 @@ def main() -> None:
         _save_state(state_file, current)
         sys.exit(1)
 
-    # Event detection comes in next task
+    events: list[dict] = []
+
+    for key, cur in current.items():
+        prev = state.get(key)
+        if prev is None:
+            events.append({
+                "type": "new_commits",
+                "pr": int(key),
+                "branch": cur["branch"],
+                "old_sha": None,
+                "new_sha": cur["last_commit_sha"],
+            })
+            continue
+
+        if cur["last_commit_sha"] != prev.get("last_commit_sha"):
+            events.append({
+                "type": "new_commits",
+                "pr": int(key),
+                "branch": cur["branch"],
+                "old_sha": prev.get("last_commit_sha"),
+                "new_sha": cur["last_commit_sha"],
+            })
+
+        if (
+            cur["last_review_id"] is not None
+            and cur["last_review_id"] != prev.get("last_review_id")
+        ):
+            pr_data = next((p for p in prs if str(p["number"]) == key), None)
+            if pr_data:
+                reviews = pr_data.get("reviews") or []
+                latest = reviews[-1] if reviews else {}
+                if latest.get("state") == "CHANGES_REQUESTED":
+                    loop_count = prev.get("review_loop_count", 0) + 1
+                    cur["review_loop_count"] = loop_count
+                    events.append({
+                        "type": "changes_requested",
+                        "pr": int(key),
+                        "branch": cur["branch"],
+                        "review_id": cur["last_review_id"],
+                        "reviewer": latest.get("author", {}).get("login", "unknown"),
+                        "body": latest.get("body", ""),
+                        "loop_count": loop_count,
+                    })
+
+    for key, prev in state.items():
+        if key not in current:
+            events.append({
+                "type": "pr_closed",
+                "pr": int(key),
+                "branch": prev["branch"],
+                "merged": True,
+            })
+
     _save_state(state_file, current)
-    sys.exit(1)
+
+    if not events:
+        sys.exit(1)
+
+    print(json.dumps({"repo": str(repo), "events": events}, indent=2))
+    sys.exit(0)
 
 
 if __name__ == "__main__":
