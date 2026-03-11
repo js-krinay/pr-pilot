@@ -230,3 +230,93 @@ def test_detects_pr_closed(tmp_path: Path) -> None:
     evt = output["events"][0]
     assert evt["type"] == "pr_closed"
     assert evt["pr"] == 1
+
+
+def test_no_changes_exits_1(tmp_path: Path) -> None:
+    """Exit 1 when nothing has changed since last poll."""
+    repo = _make_git_repo(tmp_path)
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+
+    (state_dir / "state.json").write_text(json.dumps({
+        "1": {
+            "branch": "feat/foo",
+            "last_commit_sha": "abc123",
+            "last_review_id": None,
+            "review_loop_count": 0,
+        }
+    }))
+
+    mock_gh = tmp_path / "gh"
+    mock_gh.write_text(
+        '#!/bin/sh\n'
+        'echo \'[{"number":1,"headRefName":"feat/foo","headRefOid":"abc123",'
+        '"reviewDecision":"","reviews":[]}]\'\n'
+    )
+    mock_gh.chmod(0o755)
+    mock_git = tmp_path / "git"
+    mock_git.write_text("#!/bin/sh\nexit 0\n")
+    mock_git.chmod(0o755)
+
+    env = {
+        "KLIR_CRON_STATE_DIR": str(state_dir),
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin')}",
+        "HOME": str(tmp_path),
+    }
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), str(repo)],
+        capture_output=True, text=True, env=env,
+    )
+    assert result.returncode == 1
+    assert result.stdout.strip() == ""
+
+
+def test_multiple_events(tmp_path: Path) -> None:
+    """Multiple events across PRs are all reported."""
+    repo = _make_git_repo(tmp_path)
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+
+    (state_dir / "state.json").write_text(json.dumps({
+        "1": {
+            "branch": "feat/foo",
+            "last_commit_sha": "old_sha",
+            "last_review_id": None,
+            "review_loop_count": 0,
+        },
+        "2": {
+            "branch": "feat/bar",
+            "last_commit_sha": "bar_sha",
+            "last_review_id": None,
+            "review_loop_count": 0,
+        },
+    }))
+
+    # PR 1 has new SHA, PR 2 is gone
+    mock_gh = tmp_path / "gh"
+    mock_gh.write_text(
+        '#!/bin/sh\n'
+        'echo \'[{"number":1,"headRefName":"feat/foo","headRefOid":"new_sha",'
+        '"reviewDecision":"","reviews":[]}]\'\n'
+    )
+    mock_gh.chmod(0o755)
+    mock_git = tmp_path / "git"
+    mock_git.write_text("#!/bin/sh\nexit 0\n")
+    mock_git.chmod(0o755)
+
+    env = {
+        "KLIR_CRON_STATE_DIR": str(state_dir),
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin')}",
+        "HOME": str(tmp_path),
+    }
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), str(repo)],
+        capture_output=True, text=True, env=env,
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    types = {e["type"] for e in output["events"]}
+    assert "new_commits" in types
+    assert "pr_closed" in types
+    assert len(output["events"]) == 2
