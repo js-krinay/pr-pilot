@@ -5,7 +5,6 @@ description: >
   to executor and reviewer agents. Activates on cron ticks that detect
   git changes. Use /pr-pilot to manually check status or trigger a
   review cycle.
-argument-hint: "[status|check <repo-path>]"
 allowed-tools: Bash(git *), Bash(gh *), Bash(python *)
 ---
 
