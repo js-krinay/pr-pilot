@@ -90,7 +90,7 @@ def _load_state(state_file: Path) -> dict | None:
     except OSError as e:
         _fatal(f"failed to read state file {state_file}: {e}")
     if not text.strip():
-        return None
+        return {}
     try:
         state = json.loads(text)
     except json.JSONDecodeError as e:
@@ -113,6 +113,10 @@ def _save_state(state_file: Path, state: dict) -> None:
             os.close(fd)
         os.replace(tmp, state_file)
     except OSError as e:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
         _fatal(f"failed to write state file {state_file}: {e}")
 
 
@@ -204,11 +208,16 @@ def main() -> None:
 
     for key, prev in state.items():
         if key not in current:
+            try:
+                pr_number = int(key)
+            except ValueError:
+                print(f"warning: skipping invalid PR key in state: {key!r}", file=sys.stderr)
+                continue
             events.append(
                 {
                     "type": "pr_closed",
-                    "pr": int(key),
-                    "branch": prev["branch"],
+                    "pr": pr_number,
+                    "branch": prev.get("branch", "unknown"),
                 }
             )
 
