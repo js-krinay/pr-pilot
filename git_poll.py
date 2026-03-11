@@ -54,9 +54,15 @@ def _git_fetch(repo: Path) -> None:
 
 def _list_prs(repo: Path) -> list[dict]:
     raw = _run_cmd(
-        ["gh", "pr", "list", "--json",
-         "number,headRefName,headRefOid,reviewDecision,reviews",
-         "--limit", "100"],
+        [
+            "gh",
+            "pr",
+            "list",
+            "--json",
+            "number,headRefName,headRefOid,reviewDecision,reviews",
+            "--limit",
+            "100",
+        ],
         cwd=repo,
     )
     if not raw:
@@ -108,27 +114,30 @@ def main() -> None:
     for key, cur in current.items():
         prev = state.get(key)
         if prev is None:
-            events.append({
-                "type": "new_commits",
-                "pr": int(key),
-                "branch": cur["branch"],
-                "old_sha": None,
-                "new_sha": cur["last_commit_sha"],
-            })
+            events.append(
+                {
+                    "type": "new_commits",
+                    "pr": int(key),
+                    "branch": cur["branch"],
+                    "old_sha": None,
+                    "new_sha": cur["last_commit_sha"],
+                }
+            )
             continue
 
         if cur["last_commit_sha"] != prev.get("last_commit_sha"):
-            events.append({
-                "type": "new_commits",
-                "pr": int(key),
-                "branch": cur["branch"],
-                "old_sha": prev.get("last_commit_sha"),
-                "new_sha": cur["last_commit_sha"],
-            })
+            events.append(
+                {
+                    "type": "new_commits",
+                    "pr": int(key),
+                    "branch": cur["branch"],
+                    "old_sha": prev.get("last_commit_sha"),
+                    "new_sha": cur["last_commit_sha"],
+                }
+            )
 
-        if (
-            cur["last_review_id"] is not None
-            and cur["last_review_id"] != prev.get("last_review_id")
+        if cur["last_review_id"] is not None and cur["last_review_id"] != prev.get(
+            "last_review_id"
         ):
             pr_data = next((p for p in prs if str(p["number"]) == key), None)
             if pr_data:
@@ -137,24 +146,28 @@ def main() -> None:
                 if latest.get("state") == "CHANGES_REQUESTED":
                     loop_count = prev.get("review_loop_count", 0) + 1
                     cur["review_loop_count"] = loop_count
-                    events.append({
-                        "type": "changes_requested",
-                        "pr": int(key),
-                        "branch": cur["branch"],
-                        "review_id": cur["last_review_id"],
-                        "reviewer": latest.get("author", {}).get("login", "unknown"),
-                        "body": latest.get("body", ""),
-                        "loop_count": loop_count,
-                    })
+                    events.append(
+                        {
+                            "type": "changes_requested",
+                            "pr": int(key),
+                            "branch": cur["branch"],
+                            "review_id": cur["last_review_id"],
+                            "reviewer": latest.get("author", {}).get("login", "unknown"),
+                            "body": latest.get("body", ""),
+                            "loop_count": loop_count,
+                        }
+                    )
 
     for key, prev in state.items():
         if key not in current:
-            events.append({
-                "type": "pr_closed",
-                "pr": int(key),
-                "branch": prev["branch"],
-                "merged": True,
-            })
+            events.append(
+                {
+                    "type": "pr_closed",
+                    "pr": int(key),
+                    "branch": prev["branch"],
+                    "merged": True,
+                }
+            )
 
     _save_state(state_file, current)
 

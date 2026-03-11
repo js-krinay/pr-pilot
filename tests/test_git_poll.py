@@ -53,9 +53,9 @@ def _make_git_repo(tmp_path: Path) -> Path:
     repo.mkdir()
     subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
     subprocess.run(
-        ["git", "-C", str(repo), "remote", "add", "origin",
-         "https://github.com/test/test.git"],
-        check=True, capture_output=True,
+        ["git", "-C", str(repo), "remote", "add", "origin", "https://github.com/test/test.git"],
+        check=True,
+        capture_output=True,
     )
     return repo
 
@@ -69,11 +69,11 @@ def test_first_run_creates_baseline_state(tmp_path: Path) -> None:
     # Mock gh to return one open PR
     mock_gh = tmp_path / "gh"
     mock_gh.write_text(
-        '#!/bin/sh\n'
+        "#!/bin/sh\n"
         'if [ "$1" = "pr" ] && [ "$2" = "list" ]; then\n'
         '  echo \'[{"number":1,"headRefName":"feat/foo","headRefOid":"abc123",'
         '"reviewDecision":"","reviews":[]}]\'\n'
-        'fi\n'
+        "fi\n"
     )
     mock_gh.chmod(0o755)
 
@@ -90,7 +90,9 @@ def test_first_run_creates_baseline_state(tmp_path: Path) -> None:
 
     result = subprocess.run(
         [sys.executable, str(SCRIPT), str(repo)],
-        capture_output=True, text=True, env=env,
+        capture_output=True,
+        text=True,
+        env=env,
     )
 
     assert result.returncode == 1
@@ -107,18 +109,22 @@ def test_detects_new_commits(tmp_path: Path) -> None:
     state_dir = tmp_path / "state"
     state_dir.mkdir()
 
-    (state_dir / "state.json").write_text(json.dumps({
-        "1": {
-            "branch": "feat/foo",
-            "last_commit_sha": "old_sha",
-            "last_review_id": None,
-            "review_loop_count": 0,
-        }
-    }))
+    (state_dir / "state.json").write_text(
+        json.dumps(
+            {
+                "1": {
+                    "branch": "feat/foo",
+                    "last_commit_sha": "old_sha",
+                    "last_review_id": None,
+                    "review_loop_count": 0,
+                }
+            }
+        )
+    )
 
     mock_gh = tmp_path / "gh"
     mock_gh.write_text(
-        '#!/bin/sh\n'
+        "#!/bin/sh\n"
         'echo \'[{"number":1,"headRefName":"feat/foo","headRefOid":"new_sha",'
         '"reviewDecision":"","reviews":[]}]\'\n'
     )
@@ -134,7 +140,9 @@ def test_detects_new_commits(tmp_path: Path) -> None:
     }
     result = subprocess.run(
         [sys.executable, str(SCRIPT), str(repo)],
-        capture_output=True, text=True, env=env,
+        capture_output=True,
+        text=True,
+        env=env,
     )
 
     assert result.returncode == 0
@@ -153,18 +161,22 @@ def test_detects_changes_requested(tmp_path: Path) -> None:
     state_dir = tmp_path / "state"
     state_dir.mkdir()
 
-    (state_dir / "state.json").write_text(json.dumps({
-        "1": {
-            "branch": "feat/foo",
-            "last_commit_sha": "abc123",
-            "last_review_id": None,
-            "review_loop_count": 0,
-        }
-    }))
+    (state_dir / "state.json").write_text(
+        json.dumps(
+            {
+                "1": {
+                    "branch": "feat/foo",
+                    "last_commit_sha": "abc123",
+                    "last_review_id": None,
+                    "review_loop_count": 0,
+                }
+            }
+        )
+    )
 
     mock_gh = tmp_path / "gh"
     mock_gh.write_text(
-        '#!/bin/sh\n'
+        "#!/bin/sh\n"
         'echo \'[{"number":1,"headRefName":"feat/foo","headRefOid":"abc123",'
         '"reviewDecision":"CHANGES_REQUESTED",'
         '"reviews":[{"id":"rev_1","state":"CHANGES_REQUESTED",'
@@ -182,7 +194,9 @@ def test_detects_changes_requested(tmp_path: Path) -> None:
     }
     result = subprocess.run(
         [sys.executable, str(SCRIPT), str(repo)],
-        capture_output=True, text=True, env=env,
+        capture_output=True,
+        text=True,
+        env=env,
     )
 
     assert result.returncode == 0
@@ -199,14 +213,18 @@ def test_detects_pr_closed(tmp_path: Path) -> None:
     state_dir = tmp_path / "state"
     state_dir.mkdir()
 
-    (state_dir / "state.json").write_text(json.dumps({
-        "1": {
-            "branch": "feat/foo",
-            "last_commit_sha": "abc123",
-            "last_review_id": None,
-            "review_loop_count": 0,
-        }
-    }))
+    (state_dir / "state.json").write_text(
+        json.dumps(
+            {
+                "1": {
+                    "branch": "feat/foo",
+                    "last_commit_sha": "abc123",
+                    "last_review_id": None,
+                    "review_loop_count": 0,
+                }
+            }
+        )
+    )
 
     mock_gh = tmp_path / "gh"
     mock_gh.write_text('#!/bin/sh\necho "[]"\n')
@@ -222,7 +240,9 @@ def test_detects_pr_closed(tmp_path: Path) -> None:
     }
     result = subprocess.run(
         [sys.executable, str(SCRIPT), str(repo)],
-        capture_output=True, text=True, env=env,
+        capture_output=True,
+        text=True,
+        env=env,
     )
 
     assert result.returncode == 0
@@ -238,18 +258,22 @@ def test_no_changes_exits_1(tmp_path: Path) -> None:
     state_dir = tmp_path / "state"
     state_dir.mkdir()
 
-    (state_dir / "state.json").write_text(json.dumps({
-        "1": {
-            "branch": "feat/foo",
-            "last_commit_sha": "abc123",
-            "last_review_id": None,
-            "review_loop_count": 0,
-        }
-    }))
+    (state_dir / "state.json").write_text(
+        json.dumps(
+            {
+                "1": {
+                    "branch": "feat/foo",
+                    "last_commit_sha": "abc123",
+                    "last_review_id": None,
+                    "review_loop_count": 0,
+                }
+            }
+        )
+    )
 
     mock_gh = tmp_path / "gh"
     mock_gh.write_text(
-        '#!/bin/sh\n'
+        "#!/bin/sh\n"
         'echo \'[{"number":1,"headRefName":"feat/foo","headRefOid":"abc123",'
         '"reviewDecision":"","reviews":[]}]\'\n'
     )
@@ -265,7 +289,9 @@ def test_no_changes_exits_1(tmp_path: Path) -> None:
     }
     result = subprocess.run(
         [sys.executable, str(SCRIPT), str(repo)],
-        capture_output=True, text=True, env=env,
+        capture_output=True,
+        text=True,
+        env=env,
     )
     assert result.returncode == 1
     assert result.stdout.strip() == ""
@@ -277,25 +303,29 @@ def test_multiple_events(tmp_path: Path) -> None:
     state_dir = tmp_path / "state"
     state_dir.mkdir()
 
-    (state_dir / "state.json").write_text(json.dumps({
-        "1": {
-            "branch": "feat/foo",
-            "last_commit_sha": "old_sha",
-            "last_review_id": None,
-            "review_loop_count": 0,
-        },
-        "2": {
-            "branch": "feat/bar",
-            "last_commit_sha": "bar_sha",
-            "last_review_id": None,
-            "review_loop_count": 0,
-        },
-    }))
+    (state_dir / "state.json").write_text(
+        json.dumps(
+            {
+                "1": {
+                    "branch": "feat/foo",
+                    "last_commit_sha": "old_sha",
+                    "last_review_id": None,
+                    "review_loop_count": 0,
+                },
+                "2": {
+                    "branch": "feat/bar",
+                    "last_commit_sha": "bar_sha",
+                    "last_review_id": None,
+                    "review_loop_count": 0,
+                },
+            }
+        )
+    )
 
     # PR 1 has new SHA, PR 2 is gone
     mock_gh = tmp_path / "gh"
     mock_gh.write_text(
-        '#!/bin/sh\n'
+        "#!/bin/sh\n"
         'echo \'[{"number":1,"headRefName":"feat/foo","headRefOid":"new_sha",'
         '"reviewDecision":"","reviews":[]}]\'\n'
     )
@@ -311,7 +341,9 @@ def test_multiple_events(tmp_path: Path) -> None:
     }
     result = subprocess.run(
         [sys.executable, str(SCRIPT), str(repo)],
-        capture_output=True, text=True, env=env,
+        capture_output=True,
+        text=True,
+        env=env,
     )
 
     assert result.returncode == 0
